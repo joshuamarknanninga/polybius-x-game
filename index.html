@@ -3,8 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <title>Xenotrix</title>
-  <link rel="stylesheet" href="css/styles.css">
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet"> <!-- Neon-like font -->
+  <style>
+    /* CSS Styles */
+    body {
+      margin: 0;
+      background-color: #000;
+      overflow: hidden;
+      font-family: 'Press Start 2P', cursive;
+      color: #fff;
+      text-align: center;
+    }
+
+    #gameCanvas {
+      display: block;
+      margin: 0 auto;
+      background-color: #111;
+      border: 2px solid #0ff;
+      box-shadow: 0 0 20px #0ff;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 30px;
+      border: 2px solid #0ff;
+      border-radius: 10px;
+    }
+
+    h1 {
+      font-size: 2em;
+      color: #0ff;
+      text-shadow: 0 0 10px #0ff, 0 0 20px #0ff;
+    }
+
+    p {
+      font-size: 1.2em;
+      margin: 20px 0;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 1em;
+      margin-top: 20px;
+      cursor: pointer;
+      background-color: #444;
+      border: none;
+      color: #0ff;
+      transition: background-color 0.3s, transform 0.3s;
+    }
+
+    button:hover {
+      background-color: #0ff;
+      color: #000;
+      transform: scale(1.1);
+    }
+
+    @media (max-width: 850px) {
+      #gameCanvas {
+        width: 100%;
+        height: auto;
+      }
+    }
+  </style>
+  <!-- Neon-like Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
   <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -21,10 +87,337 @@
     <button onclick="restartGame()">Restart Game</button>
   </div>
 
-  <script src="js/utils.js"></script>
-  <script src="js/classes/Player.js"></script>
-  <script src="js/classes/Obstacle.js"></script>
-  <script src="js/classes/PowerUp.js"></script>
-  <script src="js/main.js"></script>
+  <script>
+    // Utility Functions
+    function getRandomColor() {
+      const colors = ['#ff0', '#0ff', '#f0f', '#f00', '#0f0', '#00f', '#ff00ff', '#00ffff'];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    function loadAudio(src) {
+      const audio = new Audio(src);
+      audio.setAttribute('preload', 'auto');
+      return audio;
+    }
+
+    function collision(rect1, rect2) {
+      return rect1.x < rect2.x + rect2.width &&
+             rect1.x + rect1.size > rect2.x &&
+             rect1.y < rect2.y + rect2.height &&
+             rect1.y + rect1.size > rect2.y;
+    }
+
+    // Player Class
+    class Player {
+      constructor(canvasWidth, canvasHeight) {
+        this.size = 30;
+        this.x = canvasWidth / 2 - this.size / 2;
+        this.y = canvasHeight - this.size - 10;
+        this.speed = 5;
+        this.color = '#0f0';
+        this.poweredUp = false;
+        this.powerUpTimer = 0;
+      }
+
+      draw(ctx) {
+        if (this.poweredUp) {
+          ctx.fillStyle = '#ff0';
+          ctx.shadowColor = '#ff0';
+          ctx.shadowBlur = 20;
+        } else {
+          ctx.fillStyle = this.color;
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillRect(this.x, this.y, this.size, this.size);
+      }
+
+      move(direction, canvasWidth, canvasHeight) {
+        switch(direction) {
+          case 'ArrowUp':
+            if (this.y > 0) this.y -= this.speed;
+            break;
+          case 'ArrowDown':
+            if (this.y + this.size < canvasHeight) this.y += this.speed;
+            break;
+          case 'ArrowLeft':
+            if (this.x > 0) this.x -= this.speed;
+            break;
+          case 'ArrowRight':
+            if (this.x + this.size < canvasWidth) this.x += this.speed;
+            break;
+        }
+      }
+
+      activatePowerUp(duration) {
+        this.poweredUp = true;
+        this.powerUpTimer = duration;
+      }
+
+      update(deltaTime) {
+        if (this.poweredUp) {
+          this.powerUpTimer -= deltaTime;
+          if (this.powerUpTimer <= 0) {
+            this.poweredUp = false;
+            this.powerUpTimer = 0;
+          }
+        }
+      }
+    }
+
+    // Obstacle Class
+    class Obstacle {
+      constructor(canvasWidth) {
+        this.width = Math.random() * 50 + 20;
+        this.height = Math.random() * 30 + 20;
+        this.x = Math.random() * (canvasWidth - this.width);
+        this.y = -this.height;
+        this.speed = Math.random() * 3 + 2;
+        this.color = getRandomColor();
+      }
+
+      draw(ctx) {
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+      }
+
+      update(deltaTime) {
+        this.y += this.speed;
+      }
+
+      isOffScreen(canvasHeight) {
+        return this.y > canvasHeight;
+      }
+    }
+
+    // PowerUp Class
+    class PowerUp {
+      constructor(canvasWidth) {
+        this.size = 25;
+        this.x = Math.random() * (canvasWidth - this.size);
+        this.y = -this.size;
+        this.speed = 2;
+        this.color = '#ff0';
+        this.type = 'invincibility'; // Types can be 'speed', 'invincibility', etc.
+        this.duration = 5000; // Power-up duration in milliseconds
+      }
+
+      draw(ctx) {
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x + this.size/2, this.y + this.size/2, this.size/2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      update(deltaTime) {
+        this.y += this.speed;
+      }
+
+      isOffScreen(canvasHeight) {
+        return this.y > canvasHeight;
+      }
+    }
+
+    // Main Game Logic
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Game Variables
+    let player;
+    let obstacles = [];
+    let powerUps = [];
+    let score = 0;
+    let gameOver = false;
+    let obstacleInterval;
+    let powerUpInterval;
+    let difficultyIncreaseInterval = 2000; // Increase difficulty every 2 seconds
+    let lastTime = 0;
+
+    // Audio Assets (Optional: Ensure paths are correct or comment out if not available)
+    /*
+    const backgroundMusic = loadAudio('assets/audio/background.mp3');
+    backgroundMusic.loop = true;
+    const collisionSound = loadAudio('assets/audio/collision.mp3');
+    const powerUpSound = loadAudio('assets/audio/powerup.mp3');
+    const scoreSound = loadAudio('assets/audio/score.mp3');
+    */
+
+    // Keyboard Input
+    const keys = {};
+
+    // Event Listeners for Keyboard
+    window.addEventListener('keydown', function(e) {
+      keys[e.key] = true;
+    });
+
+    window.addEventListener('keyup', function(e) {
+      keys[e.key] = false;
+    });
+
+    // Start Game Function
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      resetGame();
+      // backgroundMusic.currentTime = 0;
+      // backgroundMusic.play();
+      gameLoop(performance.now());
+      obstacleInterval = setInterval(addObstacle, 1500);
+      powerUpInterval = setInterval(addPowerUp, 10000);
+      setInterval(increaseDifficulty, difficultyIncreaseInterval);
+    }
+
+    // Restart Game Function
+    function restartGame() {
+      document.getElementById('gameOverScreen').style.display = 'none';
+      startGame();
+    }
+
+    // Reset Game Variables
+    function resetGame() {
+      player = new Player(canvas.width, canvas.height);
+      obstacles = [];
+      powerUps = [];
+      score = 0;
+      gameOver = false;
+      lastTime = performance.now();
+    }
+
+    // Add Obstacle
+    function addObstacle() {
+      obstacles.push(new Obstacle(canvas.width));
+      console.log('Obstacle added. Total obstacles:', obstacles.length);
+    }
+
+    // Add Power-Up
+    function addPowerUp() {
+      powerUps.push(new PowerUp(canvas.width));
+      console.log('PowerUp added. Total power-ups:', powerUps.length);
+    }
+
+    // Increase Difficulty
+    function increaseDifficulty() {
+      obstacles.forEach(ob => ob.speed += 0.5);
+      // Optionally, decrease the interval between obstacles
+      console.log('Increased difficulty. Current obstacle speed:');
+      obstacles.forEach((ob, index) => {
+        console.log(`Obstacle ${index + 1}: Speed ${ob.speed}`);
+      });
+    }
+
+    // Handle Player Movement
+    function handleMovement(deltaTime) {
+      for (let key in keys) {
+        if (keys[key]) {
+          player.move(key, canvas.width, canvas.height);
+        }
+      }
+      player.update(deltaTime);
+    }
+
+    // Game Loop
+    function gameLoop(timestamp) {
+      if (gameOver) return;
+
+      const deltaTime = timestamp - lastTime;
+      lastTime = timestamp;
+
+      // Clear Canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Handle Player Movement
+      handleMovement(deltaTime);
+
+      // Draw and Update Player
+      player.draw(ctx);
+
+      // Draw and Update Obstacles
+      obstacles.forEach((ob, index) => {
+        ob.update(deltaTime);
+        ob.draw(ctx);
+
+        // Collision Detection
+        if (collision(player, ob)) {
+          // if (!player.poweredUp) {
+            // collisionSound.play();
+            endGame();
+          // } else {
+            // obstacles.splice(index, 1);
+            // score += 2;
+            // scoreSound.play();
+          // }
+        }
+
+        // Remove Off-Screen Obstacles
+        if (ob.isOffScreen(canvas.height)) {
+          obstacles.splice(index, 1);
+          score += 1;
+          // scoreSound.play();
+        }
+      });
+
+      // Draw and Update Power-Ups
+      powerUps.forEach((pu, index) => {
+        pu.update(deltaTime);
+        pu.draw(ctx);
+
+        // Collision Detection with Power-Up
+        if (collision(player, pu)) {
+          // powerUpSound.play();
+          player.activatePowerUp(pu.duration);
+          powerUps.splice(index, 1);
+          score += 5;
+        }
+
+        // Remove Off-Screen Power-Ups
+        if (pu.isOffScreen(canvas.height)) {
+          powerUps.splice(index, 1);
+        }
+      });
+
+      // Draw Score
+      ctx.fillStyle = '#fff';
+      ctx.font = '20px Arial';
+      ctx.fillText('Score: ' + score, 10, 30);
+
+      // Apply Motion Blur Effect
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Request Next Frame
+      requestAnimationFrame(gameLoop);
+    }
+
+    // End Game Function
+    function endGame() {
+      gameOver = true;
+      // backgroundMusic.pause();
+      cancelAnimationFrame(gameLoop);
+      clearInterval(obstacleInterval);
+      clearInterval(powerUpInterval);
+      document.getElementById('finalScore').innerText = 'Your Score: ' + score;
+      document.getElementById('gameOverScreen').style.display = 'block';
+    }
+
+    // Responsive Canvas
+    function resizeCanvas() {
+      const aspectRatio = 4 / 3;
+      let newWidth = window.innerWidth;
+      let newHeight = window.innerHeight;
+
+      if (newWidth / newHeight > aspectRatio) {
+        newWidth = newHeight * aspectRatio;
+      } else {
+        newHeight = newWidth / aspectRatio;
+      }
+
+      canvas.style.width = `${newWidth}px`;
+      canvas.style.height = `${newHeight}px`;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas(); // Initial call
+  </script>
 </body>
 </html>

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Xenotrix</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet"> <!-- Neon-like font -->
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <div id="startScreen" class="overlay">
+    <h1>Xenotrix</h1>
+    <p>Navigate the maze and avoid the obstacles.</p>
+    <button onclick="startGame()">Start Game</button>
+  </div>
+
+  <div id="gameOverScreen" class="overlay" style="display: none;">
+    <h1>Game Over</h1>
+    <p id="finalScore">Your Score: 0</p>
+    <button onclick="restartGame()">Restart Game</button>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/classes/Player.js"></script>
+  <script src="js/classes/Obstacle.js"></script>
+  <script src="js/classes/PowerUp.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
